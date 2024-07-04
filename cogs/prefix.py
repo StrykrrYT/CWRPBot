@@ -10,7 +10,7 @@ from cogs.logs import Logs
 
                                         # ! COG CREATION ! #
 
-class Prefix(app_commands.Cog):
+class Prefix(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
 

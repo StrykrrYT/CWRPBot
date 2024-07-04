@@ -105,7 +105,7 @@ try:
     reason TEXT,
     duration TEXT,
     kickDate TEXT,
-    user_kicks INTEGER,
+    user_kicks INTEGER
 )
 ''')
     config.conn.commit()

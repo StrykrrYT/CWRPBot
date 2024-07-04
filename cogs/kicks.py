@@ -28,7 +28,7 @@ class Kicks(commands.Cog):
 
     @app_commands.command(name='kicks',description='View kick logs')
     async def kicks(self,interaction: discord.Interaction, page: int = 1):
-        if any(roles in config.allowed_roles for roles in interaction.user.roles or interaction.user.guild):
+        if any(roles in config.allowed_roles for roles in interaction.user.roles or interaction.user.guild_permissions.administrator):
             config.cursor.execute("SELECT * FROM kick_logs")
             kick_logs = config.cursor.fetchall()
             if kick_logs:

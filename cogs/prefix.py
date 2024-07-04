@@ -23,7 +23,7 @@ class Prefix(commands.Cog):
                                         # ! PREFIX COMMAND ! #       
 
     @app_commands.command(name='prefix',description=f'Assign a new prefix to {config.communityBot}')
-    @app_commands.describe(new_prefix='The new prefix for {config.communityBot}')
+    @app_commands.describe(prefix='The new prefix for {config.communityBot}')
     async def prefix(self, interaction: discord.Interaction, prefix: str):
         if any(role.name in config.allowed_roles for role in interaction.user.roles or interaction.user.guild_permissions.administrator):
             try:

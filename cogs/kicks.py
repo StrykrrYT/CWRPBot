@@ -12,7 +12,7 @@ from discord.ext import commands
 from discord import app_commands
 from cogs.logs import Logs
 
-                                        # ! CREATING COG ! #
+                                        # ! COG CREATION ! #
 
 class Kicks(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -111,6 +111,8 @@ try:
     config.conn.commit()
 except sqlite3.Error as e:
     print(f"Error Connecting To Table kick_logs: {e}")
+
+                                        # ! BOT SETUP ! #
 
 async def setup(bot):
     await bot.add_cog(Kicks(bot), guilds=[discord.Object(id=759962448491970561)])

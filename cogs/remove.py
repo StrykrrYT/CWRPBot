@@ -18,7 +18,7 @@ class Remove(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        print('033[32mRemove Cog Initialized')
+        print('\033[32mRemove Cog Initialized')
 
                                         # ! REMOVE COMMAND ! #
 

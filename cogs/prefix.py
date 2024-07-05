@@ -25,7 +25,7 @@ class Prefix(commands.Cog):
     @app_commands.command(name='prefix',description=f'Assign a new prefix to {config.communityBot}')
     @app_commands.describe(prefix='The new prefix for {config.communityBot}')
     async def prefix(self, interaction: discord.Interaction, prefix: str):
-        if any(role.name in config.allowed_roles for role in interaction.user.roles or interaction.user.guild_permissions.administrator):
+        if any(role.name in config.allowed_roles for role in interaction.user.roles) or interaction.user.guild_permissions.administrator:
             try:
                 await self.bot.tree.sync()
                 await self.bot.tree.set_prefix(prefix)
@@ -39,6 +39,6 @@ class Prefix(commands.Cog):
                                         # ! BOT SETUP ! #
 
 async def setup(bot):
-    await bot.add_cog(Prefix(bot), guilds=[discord.Object(id=759962448491970561)])
+    await bot.add_cog(Prefix(bot), guilds=[discord.Object(id=759962448491970561),discord.Object(id=759960762474823701)])
 
                                         # ! INITIALIZATION ! #

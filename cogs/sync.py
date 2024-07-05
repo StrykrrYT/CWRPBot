@@ -24,7 +24,7 @@ class Sync(commands.Cog):
 
     @commands.hybrid_command(name='sync', description='Syncs the bot to the current guild.')
     async def sync(self, ctx):
-        if any(role.name in config.allowed_roles for role in ctx.author.roles or ctx.author.guild_permissions.administrator):
+        if any(role.name in config.allowed_roles for role in ctx.author.roles) or ctx.author.guild_permissions.administrator:
             fmt = await self.bot.tree.sync(guild=ctx.guild)
             try:
                 if len(fmt) == 1:
@@ -35,11 +35,11 @@ class Sync(commands.Cog):
                 await ctx.send(f"Error: {e}", ephemeral=True)
         else:
             await ctx.send("You do not have permission to execute this command", ephemeral=True)
-            await Logs(self.bot).log_interaction(ctx, "sync")
+            await Logs(self.bot).log(ctx, "sync")
 
                                         # ! BOT SETUP ! #
 
 async def setup(bot):
-    await bot.add_cog(Sync(bot), guilds=[discord.Object(id=759962448491970561)])
+    await bot.add_cog(Sync(bot), guilds=[discord.Object(id=759962448491970561),discord.Object(id=759960762474823701)])
 
                                         # ! INITIALIZATION ! #

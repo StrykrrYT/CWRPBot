@@ -23,7 +23,8 @@ class Logs(commands.Cog):
                                         # ! LOGS FUNCTION ! #
 
     async def log(self, interaction: discord.Interaction, command_name):
-        embed = discord.Embed(title="Command Execution Log", color=0xff0000, timestamp=pytz.utc.localize(datetime.utcnow()).astimezone(pytz.timezone('America/New_York')).strftime('%B, %dth %Y: %I:%M %p (%H:%M:%S) %Z'))
+        timestamp = datetime.utcnow().replace(tzinfo=pytz.utc).astimezone(pytz.timezone('America/New_York')).strftime('%B %dth %Y: %I:%M %p (%H:%M:%S %Z)')
+        embed = discord.Embed(title="Command Execution Log", color=0xff0000, timestamp=datetime.utcnow())
         embed.add_field(name="Command Executed", value=command_name, inline=False)
         embed.add_field(name="Time Of Execution", value=pytz.utc.localize(datetime.utcnow()).astimezone(pytz.timezone('America/New_York')).strftime('%B, %dth %Y: %I:%M %p (%H:%M:%S) %Z'), inline=True)
         embed.add_field(name="Date of Arrival", value=interaction.user.joined_at.astimezone(pytz.timezone('America/New_York')).strftime('%B, %dth %Y: %I:%M %p (%H:%M:%S) %Z'), inline=True)
@@ -65,7 +66,7 @@ class Logs(commands.Cog):
         found_log_channel = False
         for guild in self.bot.guilds:
             try:
-                member = await guild.fetch_member(interaction.user.id)
+                member = await interaction.guild.fetch_member(interaction.user.id)
                 log_channel = discord.utils.get(guild.channels, name='log-channel')
                 if log_channel:
                     await log_channel.send(embed=embed)
@@ -87,6 +88,6 @@ class Logs(commands.Cog):
                                         # ! BOT SETUP ! #
 
 async def setup(bot):
-    await bot.add_cog(Logs(bot),  guilds=[discord.Object(id=759962448491970561)])
+    await bot.add_cog(Logs(bot),  guilds=[discord.Object(id=759962448491970561),discord.Object(id=759960762474823701)])
 
                                         # ! INITIALIZATION ! #

@@ -37,6 +37,6 @@ class Shutdown(commands.Cog):
                                         # ! BOT SETUP ! #
 
 async def setup(bot):
-    await bot.add_cog(Shutdown(bot), guilds=[discord.Object(id=759962448491970561)])
+    await bot.add_cog(Shutdown(bot), guilds=[discord.Object(id=759962448491970561),discord.Object(id=759960762474823701)])
 
                                         # ! INITIALIZATION ! #

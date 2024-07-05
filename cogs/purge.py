@@ -25,7 +25,7 @@ class Purge(commands.Cog):
     @app_commands.command(name='purge', description="Purges a specified amount of messages from the current channel.")
     @app_commands.describe(amount='Amount of messages to delete')
     async def purge(self, interaction: discord.Interaction, amount: int):
-        if any(role.name in config.allowed_roles for role in interaction.user.roles or interaction.user.guild_permissions.administrator):
+        if any(role.name in config.allowed_roles for role in interaction.user.roles) or interaction.user.guild_permissions.administrator:
             try:
                 if amount == 1:
                     await interaction.response.send_message(content=f'Purged {str(amount)} message', ephemeral=True)
@@ -43,6 +43,6 @@ class Purge(commands.Cog):
         
                                         # ! BOT SETUP ! #
 async def setup(bot):
-    await bot.add_cog(Purge(bot), guilds=[discord.Object(id=759962448491970561)])
+    await bot.add_cog(Purge(bot), guilds=[discord.Object(id=759962448491970561),discord.Object(id=759960762474823701)])
 
                                         # ! INITIALIZATION ! #

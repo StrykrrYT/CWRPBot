@@ -20,25 +20,23 @@ from discord import app_commands
 class Ban(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        os.chdir('C:/Users/terry/Desktop/CWRPBot/')
                                         # ! BOT INIT ! #
 
     @commands.Cog.listener()
     async def on_ready(self):
         print('\033[32mBan Cog Initialized')
 
-                                        # ! KICK LOGS COMMAND ! #
+                                        # ! BAN COMMAND ! #
 
     @app_commands.command(name='ban', description='Ban a member for a specified amount of time.')
     @app_commands.describe(member='The member you want to ban.', duration='The amount of time to ban the member', ban_reason='The reason for the ban.')
-    async def ban(self, interaction, member: discord.Member, duration: str, *, ban_reason: str):
+    async def ban(self, interaction: discord.Interaction, member: discord.Member, duration: str, ban_reason: str):
         if any(role.name in config.allowed_roles for role in interaction.user.roles) or interaction.user.guild_permissions.administrator:
             try:
                 duration_regex = re.match(r'^(\d+)([smhdwMy]|mo|permanent)$', duration)
                 if duration_regex:
                     amount = int(duration_regex.group(1))
-                    unit = duration_regex.group(2)
-                    
+                    unit = duration_regex.group(2) 
                     if unit == 's':
                         delta = timedelta(seconds=amount)
                         unit_str = 'Second' if amount == 1 else 'Seconds'
@@ -63,34 +61,33 @@ class Ban(commands.Cog):
                     elif unit == 'permanent':
                         delta = None
                         unit_str = 'permanent'
-                    
+                    config.cursor.execute('SELECT COUNT(user_bans) FROM ban_logs WHERE member_id = ?', (member.id,))
+                    user_ban_count = config.cursor.fetchone()[0]
+                    if user_ban_count is not None:
+                        user_ban_count += 1
+                    if user_ban_count is None:
+                        user_ban_count = 1
                     if delta is None:
-                        edt_formatted = "Permanent Ban"
-                    else:
+                        config.cursor.execute('''INSERT INTO ban_logs (member_id, member_name, reason, duration, banDate, unbanDate, user_bans)VALUES (?, ?, ?, ?, ?, ?, ?)''', (member.id, member.display_name, ban_reason, f'{amount} {unit_str}', pytz.utc.localize(datetime.utcnow()).astimezone(pytz.timezone('America/New_York')).strftime('%B, %dth %Y: %I:%M %p (%H:%M:%S) %Z'), edt_formatted.strftime('%B, %dth %Y: %I:%M %p (%H:%M:%S) %Z'), user_ban_count))
+                        config.conn.commit()
+                        await interaction.guild.ban(member, reason=f'{ban_reason} (Permanent ban)')
+                        await interaction.response.send_message(f'{member} has been permanently banned. Reason: {ban_reason}.', ephemeral=True)
+                        edt_formatted = 'Permanent Ban'
+                    if delta is not None:
                         edt_formatted = pytz.utc.localize(datetime.utcnow()).astimezone(pytz.timezone('America/New_York')) + delta
-                        config.cursor.execute('SELECT COUNT(user_bans) FROM ban_logs WHERE member_id = ?', (member.id,))
-                        user_ban_count = config.cursor.fetchone()[0]
-                        if user_ban_count is not None:
-                            user_ban_count += 1
-                        else:
-                            user_ban_count = 1
-                            config.cursor.execute("""INSERT INTO ban_logs (member_id, member_name, reason, duration, banDate, unbanDate, user_bans)VALUES (?, ?, ?, ?, ?, ?, ?)""", (member.id, member.display_name, ban_reason, f"{amount} {unit_str}", pytz.utc.localize(datetime.utcnow()).astimezone(pytz.timezone('America/New_York')).strftime('%B, %dth %Y: %I:%M %p (%H:%M:%S) %Z'), edt_formatted.strftime('%B, %dth %Y: %I:%M %p (%H:%M:%S) %Z'), user_ban_count))
-                            config.conn.commit()
-                            if delta is None:
-                                await interaction.guild.ban(member, reason=f"{ban_reason} (Permanent ban)")
-                                await interaction.response.send_message(f"{member} has been permanently banned. Reason: {ban_reason}.", ephemeral=True)
-                            else:
-                                await interaction.guild.ban(member, reason=f"{ban_reason} (Temporary ban for {amount} {unit_str})")
-                                await interaction.response.send_message(f"{member} has been temporarily banned for {amount} {unit_str}. Reason: {ban_reason}.", ephemeral=True)
-                                await asyncio.sleep(delta.total_seconds())
-                                await interaction.channel.send(member, reason="Temporary ban expired.")
-                                await interaction.channel.send(f"{member}'s temporary ban has expired.", delete_after=5)
+                        config.cursor.execute('''INSERT INTO ban_logs (member_id, member_name, reason, duration, banDate, unbanDate, user_bans)VALUES (?, ?, ?, ?, ?, ?, ?)''', (member.id, member.display_name, ban_reason, f'{amount} {unit_str}', pytz.utc.localize(datetime.utcnow()).astimezone(pytz.timezone('America/New_York')).strftime('%B, %dth %Y: %I:%M %p (%H:%M:%S) %Z'), edt_formatted.strftime('%B, %dth %Y: %I:%M %p (%H:%M:%S) %Z'), user_ban_count))
+                        config.conn.commit()
+                        await interaction.guild.ban(member, reason=f'{ban_reason} (Temporary ban for {amount} {unit_str})')
+                        await interaction.response.send_message(f'{member} has been temporarily banned for {amount} {unit_str}. Reason: {ban_reason}.', ephemeral=True)
+                        await asyncio.sleep(delta.total_seconds())
+                        await interaction.guild.unban(member, reason='Temporary ban expired.')
+                        await interaction.channel.send(f'{member}' + 's temporary ban has expired.', delete_after=5)
                 else:
-                    await interaction.response.send_message("Invalid duration format. Use 1s, 1m, 1h, 1d, 1mo, 1y, or permanent.")
+                    await interaction.response.send_message('Invalid duration format. Use 1s, 1m, 1h, 1d, 1mo, 1y, or permanent.')
             except Exception as e:
                 await interaction.response.send_message(f'Error: {e} at line: {sys.exc_info()[-1].tb_lineno}', ephemeral=True)
         else:
-            await interaction.response.send_message("You do not have permission to execute this command", ephemeral=True)
+            await interaction.response.send_message('You do not have permission to execute this command', ephemeral=True)
             await Logs(self.bot).log(interaction, 'Ban')
 
                                         # ! BOT SETUP ! #

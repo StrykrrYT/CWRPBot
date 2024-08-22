@@ -2,10 +2,10 @@
 
                                         # ! IMPORTS ! #
 
-import logging
+# import logging
 
-# Configure logging
-logging.basicConfig(level=logging.DEBUG)  # Set logging level to INFO or DEBUG for more detailed output
+# # Configure logging
+# logging.basicConfig(level=logging.DEBUG)  # Set logging level to INFO or DEBUG for more detailed output
 
 import discord
 import config
@@ -15,8 +15,7 @@ import sqlite3
 from discord import app_commands
 from discord.ext import commands
 
-                                        #! BOT BUILDING ! #
-
+                                        #! BOT BUILDING ! #                
 intents = discord.Intents.default()
 intents.message_content = True
 APPLICATION_ID = '1257444187977154651'

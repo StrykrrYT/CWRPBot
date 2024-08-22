@@ -1,6 +1,11 @@
 import sqlite3
+import os
 
-TOKEN = 'MTI1NzQ0NDE4Nzk3NzE1NDY1MQ.Gf2UJH.CdTzTR3kzXr9lmvgf-bBaZHIV_D5wUNr4YrtkA'
+from dotenv import load_dotenv
+
+load_dotenv()
+
+TOKEN = os.getenv('DISCORD_API_TOKEN')
 GUILD_ID = 759962448491970561
 allowed_roles = ["Chief Executive Officer", "Chief Operations Officer", "Discord Manager"]
 communityBot = "CountryWideRP Official Bot"

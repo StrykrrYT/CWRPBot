@@ -20,7 +20,7 @@ from discord import app_commands
 class Unbans(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        os.chdir('C:/Users/terry/Desktop/CWRPBot/')
+        os.chdir('./')
                                         # ! BOT INIT ! #
 
     @commands.Cog.listener()

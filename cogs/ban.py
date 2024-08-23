@@ -1,98 +1,214 @@
-                                        # ! INITIALIZATION ! #
+# Imports
 
-                                        # ! IMPORTS ! #
 import asyncio
-import config
 import discord
-import os
 import pytz
 import re
-import sys
-import sqlite3
-from cogs.logs import Logs
+from mongoengine import *
 from datetime import datetime, timedelta
 from discord.ext import commands
 from discord import app_commands
+from settings_files import logging
 
+# Logging Setup
 
-                                        # ! COG CREATION ! #
+logger = logging.logging.getLogger("bot")
+
+# Constants
+GUILD_IDS = [759962448491970561, 759960762474823701]
 
 class Ban(commands.Cog):
     def __init__(self, bot: commands.Bot):
+        """
+        Initialize the Ban cog.
+
+        Args:
+            bot (commands.Bot): The bot object.
+        """
+
         self.bot = bot
-                                        # ! BOT INIT ! #
 
-    @commands.Cog.listener()
-    async def on_ready(self):
-        print('\033[32mBan Cog Initialized')
+    async def parse_duration(self, duration: str) -> timedelta:
+        """
+        Parse a duration string and return a timedelta object.
 
-                                        # ! BAN COMMAND ! #
+        Args:
+            duration (str): The duration string to parse.
+
+        Returns:
+            timedelta: The parsed timedelta object.
+
+        Raises:
+            ValueError: If the duration string is invalid.
+        """
+        if duration.lower() == 'permanent':
+            delta = 'Never'
+
+        duration_regex = re.match(r'^(\d+)([smhdwMy]|mo|y)$', duration)
+        if not duration_regex:
+            raise ValueError(f"Invalid duration string: {duration}")
+
+        amount = int(duration_regex.group(1))
+        unit = duration_regex.group(2)
+
+        if unit == 's':
+            delta = timedelta(seconds=amount)
+        elif unit == 'm':
+            delta = timedelta(minutes=amount)
+        elif unit == 'h':
+            delta = timedelta(hours=amount)
+        elif unit == 'd':
+            delta = timedelta(days=amount)
+        elif unit == 'w':
+            delta = timedelta(weeks=amount)
+        elif unit == 'mo':
+            delta = timedelta(days=amount * 30)
+        elif unit == 'y':
+            delta = timedelta(days=amount * 365)
+        else:
+            raise ValueError(f"Invalid duration unit: {unit}")
+
+        return delta
+    
+    async def format_ban_duration(self, parsed_duration) -> str:
+      """
+      Format a timedelta object as a string.
+
+      Args:
+          delta (timedelta): The timedelta object to format.
+
+      Returns:
+          str: The formatted string.
+      """
+      days = parsed_duration.days
+      hours = parsed_duration.seconds // 3600
+      minutes = (parsed_duration.seconds // 60) % 60
+      seconds = parsed_duration.seconds % 60
+  
+      if days >= 365:
+          amount = days // 365
+          unit_str = "year" if amount == 1 else "years"
+      elif days >= 30:
+          amount = days // 30
+          unit_str = "month" if amount == 1 else "months"
+      elif days >= 7:
+          weeks = days // 7
+          remaining_days = days % 7
+          if remaining_days == 0:
+              amount = weeks
+              unit_str = "week" if amount == 1 else "weeks"
+          else:
+              amount = f"{weeks} weeks and {remaining_days} days"
+              unit_str = ""
+      else:
+          amount = days
+          unit_str = "day" if amount == 1 else "days"
+  
+      return f'{amount} {unit_str}'
+
+    async def calculate_unban_date(self, delta: timedelta) -> datetime:
+        """
+        Calculate the unban date based on the given timedelta.
+
+        Args:
+            delta (timedelta): The timedelta to add to the current date.
+
+        Returns:
+            datetime: The unban date.
+        """
+        if delta is None:
+            return None
+
+        return pytz.utc.localize(datetime.utcnow()).astimezone(pytz.timezone('America/New_York')) + delta
+
+    async def ban_member(self, interaction: discord.Interaction, member: discord.Member, ban_reason: str, delta: timedelta):
+        """
+        Ban a member and log the ban.
+
+        Args:
+            interaction (discord.Interaction): The interaction object.
+            member (discord.Member): The member to ban.
+            ban_reason (str): The reason for the ban.
+            delta (timedelta): The duration of the ban.
+
+        Returns:
+            None
+        """
+        if delta is None:
+            await interaction.guild.ban(member, reason=f'{ban_reason} (Permanent ban)')
+            await interaction.response.send_message(f'{member} has been permanently banned. Reason: {ban_reason}.', ephemeral=True)
+        else:
+            await interaction.guild.ban(member, reason=f'{ban_reason} (Temporary ban for {delta})')
+            await interaction.response.send_message(f'{member} has been temporarily banned for {delta}. Reason: {ban_reason}.', ephemeral=True)
+            await asyncio.sleep(delta.total_seconds())
+            await interaction.guild.unban(member, reason='Temporary ban expired.')
+            await interaction.channel.send(f'{member.name}' + 's temporary ban has expired.', delete_after=5)
+
+    async def log_ban(self, interaction: discord.Interaction, member: discord.Member, ban_reason: str, delta: timedelta, unban_date: datetime):
+        """
+        Log the ban.
+
+        Args:
+            interaction (discord.Interaction): The interaction object.
+            member (discord.Member): The member to ban.
+            ban_reason (str): The reason for the ban.
+            delta (timedelta): The duration of the ban.
+            unban_date (datetime): The unban date.
+
+        Returns:
+            None
+        """
+        db = get_db()
+        BanLogs = db.BanLogs
+        user_ban_count = BanLogs.count_documents({"Member_ID": int(member.id)}) + 1
+
+        BanLogs.insert_one({
+            "Member_ID": int(member.id),
+            "Member_Name": str(member.name),
+            "Reason": str(ban_reason),
+            "Duration": str(delta) if delta is not None else 'Permanent',
+            "Ban_Date": str(pytz.utc.localize(datetime.utcnow()).astimezone(pytz.timezone('America/New_York')).strftime('%B, %dth %Y: %I:%M %p (%H:%M:%S) %Z')),
+            "Unban_Date": str(unban_date.strftime('%B, %dth %Y: %I:%M %p (%H:%M:%S) %Z')) if unban_date is not None else 'Never',
+            "User_Bans": int(user_ban_count),
+            "Server": str(interaction.guild.name),
+            "Banned_By": str(interaction.user.display_name)
+        })
 
     @app_commands.command(name='ban', description='Ban a member for a specified amount of time.')
     @app_commands.describe(member='The member you want to ban.', duration='The amount of time to ban the member', ban_reason='The reason for the ban.')
     async def ban(self, interaction: discord.Interaction, member: discord.Member, duration: str, ban_reason: str):
-        if any(role.name in config.allowed_roles for role in interaction.user.roles) or interaction.user.guild_permissions.administrator:
-            try:
-                duration_regex = re.match(r'^(\d+)([smhdwMy]|mo|permanent)$', duration)
-                if duration_regex:
-                    amount = int(duration_regex.group(1))
-                    unit = duration_regex.group(2) 
-                    if unit == 's':
-                        delta = timedelta(seconds=amount)
-                        unit_str = 'Second' if amount == 1 else 'Seconds'
-                    elif unit == 'm':
-                        delta = timedelta(minutes=amount)
-                        unit_str = 'Minute' if amount == 1 else 'Minutes'
-                    elif unit == 'h':
-                        delta = timedelta(hours=amount)
-                        unit_str = 'Hour' if amount == 1 else 'Hours'
-                    elif unit == 'd':
-                        delta = timedelta(days=amount)
-                        unit_str = 'Day' if amount == 1 else 'Days'
-                    elif unit == 'w':
-                        delta = timedelta(weeks=amount)
-                        unit_str = 'Week' if amount == 1 else 'Weeks'
-                    elif unit == 'mo':
-                        delta = timedelta(days=amount * 30)
-                        unit_str = 'Month' if amount == 1 else 'Months'
-                    elif unit == 'y':
-                        delta = timedelta(days=amount * 365)
-                        unit_str = 'Year' if amount == 1 else 'Years'
-                    elif unit == 'permanent':
-                        delta = None
-                        unit_str = 'permanent'
-                    config.cursor.execute('SELECT COUNT(user_bans) FROM ban_logs WHERE member_id = ?', (member.id,))
-                    user_ban_count = config.cursor.fetchone()[0]
-                    if user_ban_count is not None:
-                        user_ban_count += 1
-                    if user_ban_count is None:
-                        user_ban_count = 1
-                    if delta is None:
-                        config.cursor.execute('''INSERT INTO ban_logs (member_id, member_name, reason, duration, banDate, unbanDate, user_bans)VALUES (?, ?, ?, ?, ?, ?, ?)''', (member.id, member.display_name, ban_reason, f'{amount} {unit_str}', pytz.utc.localize(datetime.utcnow()).astimezone(pytz.timezone('America/New_York')).strftime('%B, %dth %Y: %I:%M %p (%H:%M:%S) %Z'), edt_formatted.strftime('%B, %dth %Y: %I:%M %p (%H:%M:%S) %Z'), user_ban_count))
-                        config.conn.commit()
-                        await interaction.guild.ban(member, reason=f'{ban_reason} (Permanent ban)')
-                        await interaction.response.send_message(f'{member} has been permanently banned. Reason: {ban_reason}.', ephemeral=True)
-                        edt_formatted = 'Permanent Ban'
-                    if delta is not None:
-                        edt_formatted = pytz.utc.localize(datetime.utcnow()).astimezone(pytz.timezone('America/New_York')) + delta
-                        config.cursor.execute('''INSERT INTO ban_logs (member_id, member_name, reason, duration, banDate, unbanDate, user_bans)VALUES (?, ?, ?, ?, ?, ?, ?)''', (member.id, member.display_name, ban_reason, f'{amount} {unit_str}', pytz.utc.localize(datetime.utcnow()).astimezone(pytz.timezone('America/New_York')).strftime('%B, %dth %Y: %I:%M %p (%H:%M:%S) %Z'), edt_formatted.strftime('%B, %dth %Y: %I:%M %p (%H:%M:%S) %Z'), user_ban_count))
-                        config.conn.commit()
-                        await interaction.guild.ban(member, reason=f'{ban_reason} (Temporary ban for {amount} {unit_str})')
-                        await interaction.response.send_message(f'{member} has been temporarily banned for {amount} {unit_str}. Reason: {ban_reason}.', ephemeral=True)
-                        await asyncio.sleep(delta.total_seconds())
-                        await interaction.guild.unban(member, reason='Temporary ban expired.')
-                        await interaction.channel.send(f'{member}' + 's temporary ban has expired.', delete_after=5)
-                else:
-                    await interaction.response.send_message('Invalid duration format. Use 1s, 1m, 1h, 1d, 1mo, 1y, or permanent.')
-            except Exception as e:
-                await interaction.response.send_message(f'Error: {e} at line: {sys.exc_info()[-1].tb_lineno}', ephemeral=True)
-        else:
-            await interaction.response.send_message('You do not have permission to execute this command', ephemeral=True)
-            await Logs(self.bot).log(interaction, 'Ban')
+        """
+        Ban a member for a specified amount of time.
 
-                                        # ! BOT SETUP ! #
+        Args:
+            interaction (discord.Interaction): The interaction object.
+            member (discord.Member): The member to ban.
+            duration (str): The duration of the ban.
+            ban_reason (str): The reason for the ban.
+
+        Returns:
+            None
+        """
+        try:
+            parsed_duration = await self.parse_duration(duration)
+            format_ban_duration = await self.format_ban_duration(parsed_duration)
+            unban_date = await self.calculate_unban_date(parsed_duration)
+            await self.ban_member(interaction, member, ban_reason, parsed_duration)
+            await self.log_ban(interaction, member, ban_reason, parsed_duration, unban_date)
+            await interaction.response.send_message(f'{member} has been temporarily banned for {format_ban_duration}. Reason: {ban_reason}.', ephemeral=True)
+        except discord.Forbidden:
+            await interaction.response.send_message('I do not have permission to ban members.', ephemeral=True)
+        except ValueError as e:
+            await interaction.response.send_message(f'Invalid duration: {e}', ephemeral=True)
+        except Exception as e:
+            logger.error(f'Error banning member: {e}')
+            await interaction.response.send_message('An error occurred while banning the member.', ephemeral=True)
 
 async def setup(bot):
-    await bot.add_cog(Ban(bot), guilds=[discord.Object(id=759962448491970561),discord.Object(id=759960762474823701)])
+    """
+    Add the Ban cog to the bot.
 
-                                        # ! INITIALIZATION ! #
+    Args:
+        bot: The bot to add the cog to.
+    """
+    await bot.add_cog(Ban(bot), guilds=[discord.Object(id=guild_id) for guild_id in GUILD_IDS])

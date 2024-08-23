@@ -1,5 +1,4 @@
 # Imports
-
 import asyncio
 import discord
 import pytz
@@ -11,7 +10,6 @@ from discord import app_commands
 from settings_files import logging
 
 # Logging Setup
-
 logger = logging.logging.getLogger("bot")
 
 # Constants
@@ -25,8 +23,11 @@ class Ban(commands.Cog):
         Args:
             bot (commands.Bot): The bot object.
         """
-
         self.bot = bot
+
+    @commands.Cog.listener()
+    async def on_ready(self):
+      logger.info('\033[32mBan Cog Initialized\033[97m')
 
     async def parse_duration(self, duration: str) -> timedelta:
         """
@@ -43,6 +44,7 @@ class Ban(commands.Cog):
         """
         if duration.lower() == 'permanent':
             delta = 'Never'
+            return delta
 
         duration_regex = re.match(r'^(\d+)([smhdwMy]|mo|y)$', duration)
         if not duration_regex:
@@ -69,42 +71,42 @@ class Ban(commands.Cog):
             raise ValueError(f"Invalid duration unit: {unit}")
 
         return delta
-    
+
     async def format_ban_duration(self, parsed_duration) -> str:
-      """
-      Format a timedelta object as a string.
+        """
+        Format a timedelta object as a string.
 
-      Args:
-          delta (timedelta): The timedelta object to format.
+        Args:
+            delta (timedelta): The timedelta object to format.
 
-      Returns:
-          str: The formatted string.
-      """
-      days = parsed_duration.days
-      hours = parsed_duration.seconds // 3600
-      minutes = (parsed_duration.seconds // 60) % 60
-      seconds = parsed_duration.seconds % 60
-  
-      if days >= 365:
-          amount = days // 365
-          unit_str = "year" if amount == 1 else "years"
-      elif days >= 30:
-          amount = days // 30
-          unit_str = "month" if amount == 1 else "months"
-      elif days >= 7:
-          weeks = days // 7
-          remaining_days = days % 7
-          if remaining_days == 0:
-              amount = weeks
-              unit_str = "week" if amount == 1 else "weeks"
-          else:
-              amount = f"{weeks} weeks and {remaining_days} days"
-              unit_str = ""
-      else:
-          amount = days
-          unit_str = "day" if amount == 1 else "days"
-  
-      return f'{amount} {unit_str}'
+        Returns:
+            str: The formatted string.
+        """
+        days = parsed_duration.days
+        hours = parsed_duration.seconds // 3600
+        minutes = (parsed_duration.seconds // 60) % 60
+        seconds = parsed_duration.seconds % 60
+
+        if days >= 365:
+            amount = days // 365
+            unit_str = "year" if amount == 1 else "years"
+        elif days >= 30:
+            amount = days // 30
+            unit_str = "month" if amount == 1 else "months"
+        elif days >= 7:
+            weeks = days // 7
+            remaining_days = days % 7
+            if remaining_days == 0:
+                amount = weeks
+                unit_str = "week" if amount == 1 else "weeks"
+            else:
+                amount = f"{weeks} weeks and {remaining_days} days"
+                unit_str = ""
+        else:
+            amount = days
+            unit_str = "day" if amount == 1 else "days"
+
+        return f'{amount} {unit_str}'
 
     async def calculate_unban_date(self, delta: timedelta) -> datetime:
         """
@@ -121,7 +123,7 @@ class Ban(commands.Cog):
 
         return pytz.utc.localize(datetime.utcnow()).astimezone(pytz.timezone('America/New_York')) + delta
 
-    async def ban_member(self, interaction: discord.Interaction, member: discord.Member, ban_reason: str, delta: timedelta):
+    async def ban_member(self, interaction: discord.Interaction, member: discord.Member, ban_reason: str, delta: timedelta, format_ban_duration: str):
         """
         Ban a member and log the ban.
 
@@ -134,17 +136,20 @@ class Ban(commands.Cog):
         Returns:
             None
         """
-        if delta is None:
+        if format_ban_duration =='Permanent':
             await interaction.guild.ban(member, reason=f'{ban_reason} (Permanent ban)')
-            await interaction.response.send_message(f'{member} has been permanently banned. Reason: {ban_reason}.', ephemeral=True)
+            await interaction.response.send_message(f'{member} has been Permanently banned for: {ban_reason}.', ephemeral=True)
         else:
-            await interaction.guild.ban(member, reason=f'{ban_reason} (Temporary ban for {delta})')
-            await interaction.response.send_message(f'{member} has been temporarily banned for {delta}. Reason: {ban_reason}.', ephemeral=True)
-            await asyncio.sleep(delta.total_seconds())
-            await interaction.guild.unban(member, reason='Temporary ban expired.')
-            await interaction.channel.send(f'{member.name}' + 's temporary ban has expired.', delete_after=5)
+            await interaction.guild.ban(member, reason=f'{ban_reason} (Temporary ban for {format_ban_duration})')
+            await interaction.response.send_message(f'{member} has been temporarily banned for {format_ban_duration}. Reason: {ban_reason}.', ephemeral=True)
+            await self.unban(interaction, member, delta)
 
-    async def log_ban(self, interaction: discord.Interaction, member: discord.Member, ban_reason: str, delta: timedelta, unban_date: datetime):
+    async def unban(self, interaction: discord.Interaction, member, delta: timedelta):
+        await asyncio.sleep(delta.total_seconds())
+        await interaction.guild.unban(member, reason='Temporary ban expired.')
+        await interaction.channel.send(f'{member.name}' + 's temporary ban has expired.', delete_after=5)
+
+    async def log_ban(self, interaction: discord.Interaction, member: discord.Member, ban_reason: str, format_ban_duration: str, unban_date: datetime):
         """
         Log the ban.
 
@@ -158,21 +163,24 @@ class Ban(commands.Cog):
         Returns:
             None
         """
-        db = get_db()
-        BanLogs = db.BanLogs
-        user_ban_count = BanLogs.count_documents({"Member_ID": int(member.id)}) + 1
+        try:
+            db = get_db()
+            BanLogs = db.BanLogs
+            user_ban_count = BanLogs.count_documents({"Member_ID": int(member.id)}) + 1
 
-        BanLogs.insert_one({
-            "Member_ID": int(member.id),
-            "Member_Name": str(member.name),
-            "Reason": str(ban_reason),
-            "Duration": str(delta) if delta is not None else 'Permanent',
-            "Ban_Date": str(pytz.utc.localize(datetime.utcnow()).astimezone(pytz.timezone('America/New_York')).strftime('%B, %dth %Y: %I:%M %p (%H:%M:%S) %Z')),
-            "Unban_Date": str(unban_date.strftime('%B, %dth %Y: %I:%M %p (%H:%M:%S) %Z')) if unban_date is not None else 'Never',
-            "User_Bans": int(user_ban_count),
-            "Server": str(interaction.guild.name),
-            "Banned_By": str(interaction.user.display_name)
-        })
+            BanLogs.insert_one({
+                "Member_ID": int(member.id),
+                "Member_Name": str(member.name),
+                "Reason": str(ban_reason),
+                "Duration": str(format_ban_duration) if unban_date != 'Never' else 'Permanent',
+                "Ban_Date": str(pytz.utc.localize(datetime.utcnow()).astimezone(pytz.timezone('America/New_York')).strftime('%B, %dth %Y: %I:%M %p (%H:%M:%S) %Z')),
+                "Unban_Date": str(unban_date.strftime('%B, %dth %Y: %I:%M %p (%H:%M:%S) %Z')) if unban_date != 'Never' else 'Never',
+                "User_Bans": int(user_ban_count),
+                "Server": str(interaction.guild.name),
+                "Banned_By": str(interaction.user.display_name)
+            })
+        except Exception as e:
+            logger.error(e)
 
     @app_commands.command(name='ban', description='Ban a member for a specified amount of time.')
     @app_commands.describe(member='The member you want to ban.', duration='The amount of time to ban the member', ban_reason='The reason for the ban.')
@@ -191,11 +199,14 @@ class Ban(commands.Cog):
         """
         try:
             parsed_duration = await self.parse_duration(duration)
-            format_ban_duration = await self.format_ban_duration(parsed_duration)
-            unban_date = await self.calculate_unban_date(parsed_duration)
-            await self.ban_member(interaction, member, ban_reason, parsed_duration)
-            await self.log_ban(interaction, member, ban_reason, parsed_duration, unban_date)
-            await interaction.response.send_message(f'{member} has been temporarily banned for {format_ban_duration}. Reason: {ban_reason}.', ephemeral=True)
+            if parsed_duration != 'Never':
+              format_ban_duration = await self.format_ban_duration(parsed_duration)
+              unban_date = await self.calculate_unban_date(parsed_duration)
+            else:
+                unban_date = 'Never'
+                format_ban_duration = 'Permanent'
+            await self.log_ban(interaction, member, ban_reason, format_ban_duration, unban_date)
+            await self.ban_member(interaction, member, ban_reason, parsed_duration, format_ban_duration)
         except discord.Forbidden:
             await interaction.response.send_message('I do not have permission to ban members.', ephemeral=True)
         except ValueError as e:

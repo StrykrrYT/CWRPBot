@@ -1,48 +1,73 @@
-                                        # ! INITIALIZATION ! #
-
-                                        # ! IMPORTS ! #
-
+# Imports
 import discord
-import config
+import settings
+import sys
+from cogs.logs import Logs
 from discord.ext import commands
 from discord import app_commands
-from cogs.logs import Logs
+from settings_files import logging
 
-                                        # ! COG CREATION ! #
+# Logging Setup
+logger = logging.logging.getLogger('bot')
 
 class Purge(commands.Cog):
     def __init__(self, bot: commands.Bot):
+        """
+        Initialize the Purge cog.
+
+        Args:
+            bot (commands.Bot): The bot object.
+        """
+
         self.bot = bot
 
                                         # ! BOT INIT ! #
 
     @commands.Cog.listener()
     async def on_ready(self):
-        print('\033[32mPurge Cog Initialized')
+        logger.info('\033[32mPurge Cog Initialized\033[97m')
 
                                         # ! PURGE COMMAND ! #        
         
     @app_commands.command(name='purge', description="Purges a specified amount of messages from the current channel.")
     @app_commands.describe(amount='Amount of messages to delete')
     async def purge(self, interaction: discord.Interaction, amount: int):
-        if any(role.name in config.allowed_roles for role in interaction.user.roles) or interaction.user.guild_permissions.administrator:
+        """
+        Purges a specified amount of messages from the current channel.
+
+        Args:
+            amount (int): The amount of messages to delete.
+
+        Raises:
+            Exception: If an error occurs while purging messages.
+
+        Returns:
+            None
+        """
+        if any(role.name in settings.allowed_roles for role in interaction.user.roles) or interaction.user.guild_permissions.administrator:
             try:
                 if amount == 1:
                     await interaction.response.send_message(content=f'Purged {str(amount)} message', ephemeral=True)
-                    await interaction.channel.purge(limit=amount)
                 else:
                     await interaction.response.send_message(content=f'Purged {str(amount)} messages', ephemeral=True)
-                    await interaction.channel.purge(limit=amount)
+                messages = []
+                async for message in interaction.channel.history(limit=amount):
+                    messages.append(message)
+                await interaction.channel.purge(limit=amount, bulk=True)
             except Exception as e:
-                await interaction.response.send_message(content=f'Error: {e}', ephemeral=True)
-                return
+                logger.error(f'Error: {e} at line: {sys.exc_info()[-1].tb_lineno}')
         else:
-            await interaction.response.send_message(content=f"You don't have permission to manage messages in this channel.", ephemeral=True)
+            await interaction.response.send_message('You do not have permission to use this command.', ephemeral=True, delete_after=3)
             await Logs(self.bot).log(interaction, "purge")
-            return
         
                                         # ! BOT SETUP ! #
 async def setup(bot):
-    await bot.add_cog(Purge(bot), guilds=[discord.Object(id=759962448491970561),discord.Object(id=759960762474823701)])
+    """
+    Add the Purge cog to the bot.
+
+    Args:
+        bot (commands.Bot): The bot object.
+    """
+    await bot.add_cog(Purge(bot), guilds=[discord.Object(id=guild_id) for guild_id in settings.GUILD_IDS])
 
                                         # ! INITIALIZATION ! #

@@ -1,54 +1,70 @@
-                                        # ! INITIALIZATION ! #
-
-                                        # ! IMPORTS ! #
-
+# Imports
 import discord
-import config
+import settings
+import sys
+from cogs.logs import Logs
 from discord.ext import commands
 from discord import app_commands
-from cogs.logs import Logs
+from settings_files import logging
 
-                                        # ! COG CREATION ! #
+# Logging Setup
+logger = logging.logging.getLogger('bot')
 
 class Remove(commands.Cog):
     def __init__(self, bot: commands.Bot):
+        """
+        Initialize the Remove cog.
+
+        Args:
+            bot (commands.Bot): The bot object.
+        """
         self.bot = bot
     
                                         # ! BOT INIT ! #
 
     @commands.Cog.listener()
     async def on_ready(self):
-        print('\033[32mRemove Cog Initialized')
+        logger.info('\033[32mRemove Cog Initialized\033[97m')
 
                                         # ! REMOVE COMMAND ! #
 
-    @app_commands.command(name='remove', description='Remove {communityBot} from all servers and clean up all utilities')
+    @app_commands.command(name='remove', description=f'Remove {settings.communityBot} from all servers and clean up all utilities')
     async def remove(self, interaction: discord.Interaction):
+        """
+        Remove {settings.communityBot} from all servers and clean up all utilities.
+
+        Args:
+            interaction (discord.Interaction): The interaction object.
+
+        Raises:
+            Exception: If an error occurs while removing commands and cleaning up utilities.
+
+        Returns:
+            None
+        """
         if interaction.user.id == 295430975368986624:
             try:
-                deleted_count = 0
-                async for message in interaction.channel.history(limit=100):
-                    if message.author == self.bot.user:
-                        await message.delete()
-                        deleted_count += 1
-                await interaction.response.send_message(f'Deleted {deleted_count} {config.communityBot} messages.', ephemeral=True)
-                for command in list(self.bot.commands):
-                    self.bot.remove_command(command.name)
-                await interaction.response.send_message('Removed all bot commands.', ephemeral=True)
+                await interaction.response.send_message('Removed commands, cleaned up all utilities, and left all servers.', ephemeral=True)
                 for guild in self.bot.guilds:
-                    try:
+                    for channel in guild.text_channels:
+                        await channel.purge(limit=None, check=lambda m: m.author == self.bot.user, bulk=True)
+                    if guild != interaction.guild:
                         await guild.leave()
-                        await interaction.response.send_message(f'Removed {config.communityBot} from all Community servers.', ephemeral=True)
-                    except Exception as e:
-                        await interaction.response.send_message(f'Failed to remove bot from {guild.name}: {e}', ephemeral=True)
+                await interaction.guild.leave()
             except Exception as e:
-                await interaction.response.send_message(f'An error occurred during cleanup: {e}', ephemeral=True)
+                logger.error(f'Error: {e} at line: {sys.exc_info()[-1].tb_lineno}')
         else:
-            await interaction.response.send_message('You do not have permission to execute this command.', ephemeral=True)
+            await interaction.response.send_message("You do not have permission to execute this command.", ephemeral=True)
             await Logs(self.bot).log(interaction, 'remove')
 
                                         # ! BOT SETUP ! #
 async def setup(bot):
-    await bot.add_cog(Remove(bot), guilds=[discord.Object(id=759962448491970561),discord.Object(id=759960762474823701)])
+    """
+    Add the Remove cog to the bot.
+
+    Args:
+        bot (commands.Bot): The bot to add the cog to.
+    """
+    await bot.add_cog(Remove(bot), guilds=[discord.Object(id=guild_id) for guild_id in settings.GUILD_IDS])
 
                                         # ! INITIALIZATION ! #

@@ -3,10 +3,13 @@
                                         # ! IMPORTS ! #
 
 import discord
-import config
+import settings
+from cogs.logs import Logs
 from discord.ext import commands
 from discord import app_commands
-from cogs.logs import Logs
+from settings_files import logging
+
+logger = logging.logging.getLogger('bot')
 
                                         # ! COG CREATION ! #
 
@@ -18,19 +21,20 @@ class Prefix(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        print('\033[32mPrefix Cog Initialized')
+        logger.info('\033[32mPrefix Cog Initialized\033[97m')
 
                                         # ! PREFIX COMMAND ! #       
 
-    @app_commands.command(name='prefix',description=f'Assign a new prefix to {config.communityBot}')
-    @app_commands.describe(prefix='The new prefix for {config.communityBot}')
+    @app_commands.command(name='prefix',description=f'Assign a new prefix to {settings.communityBot}')
+    @app_commands.describe(prefix='The new prefix for {settings.communityBot}')
     async def prefix(self, interaction: discord.Interaction, prefix: str):
-        if any(role.name in config.allowed_roles for role in interaction.user.roles) or interaction.user.guild_permissions.administrator:
+        if any(role.name in settings.allowed_roles for role in interaction.user.roles) or interaction.user.guild_permissions.administrator:
             try:
                 await self.bot.tree.sync()
-                await self.bot.tree.set_prefix(prefix)
+                await commands.bot_Prefix(prefix)
                 await interaction.response.send_message(f'Prefix changed to {prefix}', ephemeral=True)
             except Exception as e:
+                logger.error(e)
                 await interaction.response.send_message(f'Error: {e}', ephemeral=True)
         else:
             await interaction.response.send_message('You do not have permission to execute this command.', ephemeral=True)
